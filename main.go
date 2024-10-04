@@ -51,6 +51,9 @@ func main() {
 	mux.Handle("GET /admin/metrics", cfg.MetricsHandler())
 	mux.Handle("POST /admin/reset", cfg.ResetHandler())
 
+	// Webhook
+	mux.Handle("POST /api/polka/webhooks", cfg.PolkaWebhookHandler())
+
 	fmt.Printf("Serving on %v\n", port)
 	log.Fatal(server.ListenAndServe())
 }

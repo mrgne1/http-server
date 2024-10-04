@@ -16,6 +16,12 @@ update users
 where id = $1
 returning *;
 
+-- name: UpdateChirpyRed :one
+update users
+    set is_chirpy_red = $1
+where id = $2
+returning *;
+
 -- name: ResetUsers :exec
 delete from users;
 

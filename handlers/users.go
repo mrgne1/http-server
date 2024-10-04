@@ -16,6 +16,7 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 }
@@ -60,10 +61,11 @@ func (c *ApiConfig) CreateUserHandler() http.Handler {
 			}
 
 			u := User{
-				ID:        user.ID,
-				CreatedAt: user.CreatedAt,
-				UpdatedAt: user.UpdatedAt,
-				Email:     user.Email,
+				ID:          user.ID,
+				CreatedAt:   user.CreatedAt,
+				UpdatedAt:   user.UpdatedAt,
+				Email:       user.Email,
+				IsChirpyRed: user.IsChirpyRed,
 			}
 			body, _ := json.Marshal(u)
 			w.WriteHeader(201)
@@ -81,7 +83,7 @@ func (c *ApiConfig) LoginHandler() http.Handler {
 				Password string `json:"password"`
 				Email    string `json:"email"`
 			}
-			
+
 			params := parameters{}
 
 			decoder := json.NewDecoder(r.Body)
@@ -120,16 +122,16 @@ func (c *ApiConfig) LoginHandler() http.Handler {
 				return
 			}
 
-			createRefreshTokenParams := database.CreateRefreshTokenParams {
-				Token: refreshTokenString,
-				UserID: user.ID,
+			createRefreshTokenParams := database.CreateRefreshTokenParams{
+				Token:     refreshTokenString,
+				UserID:    user.ID,
 				ExpiresAt: time.Now().Add(time.Hour * 24 * 60).UTC(),
 			}
 			refreshToken, err := c.Db.CreateRefreshToken(r.Context(), createRefreshTokenParams)
 			if err != nil {
 				log.Println(err)
 				sendErrorResponse(w, "Error recording refresh token", 500)
-				return 
+				return
 			}
 
 			resp := User{
@@ -137,6 +139,7 @@ func (c *ApiConfig) LoginHandler() http.Handler {
 				CreatedAt:    user.CreatedAt,
 				UpdatedAt:    user.UpdatedAt,
 				Email:        user.Email,
+				IsChirpyRed:  user.IsChirpyRed,
 				Token:        token,
 				RefreshToken: refreshToken.Token,
 			}
@@ -151,10 +154,10 @@ func (c *ApiConfig) LoginHandler() http.Handler {
 }
 
 func (cfg *ApiConfig) UserUpdateHandler() http.Handler {
-	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		type parameters struct {
 			Password string `json:"password"`
-			Email string `json:"email"`
+			Email    string `json:"email"`
 		}
 
 		params := parameters{}
@@ -179,9 +182,9 @@ func (cfg *ApiConfig) UserUpdateHandler() http.Handler {
 			return
 		}
 
-		userParams := database.UpdateUserParams {
-			ID: userId,
-			Email: params.Email,
+		userParams := database.UpdateUserParams{
+			ID:             userId,
+			Email:          params.Email,
 			HashedPassword: hashedPassword,
 		}
 		user, err := cfg.Db.UpdateUser(r.Context(), userParams)
@@ -191,11 +194,12 @@ func (cfg *ApiConfig) UserUpdateHandler() http.Handler {
 			return
 		}
 
-		resp := User {
-			ID: user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email: user.Email,
+		resp := User{
+			ID:          user.ID,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		}
 		body, err := json.Marshal(resp)
 		if err != nil {
