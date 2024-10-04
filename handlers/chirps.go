@@ -153,3 +153,40 @@ func (cfg *ApiConfig) GetChirpHandler() http.Handler {
 	)
 }
 
+func (cfg *ApiConfig) DeleteChirpHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chirpId, err := uuid.Parse(r.PathValue("chirpID"))
+		if err != nil {
+			log.Println(err)
+			sendErrorResponse(w, "Invalid Chirp ID", 400)
+			return
+		}
+		userId := r.Context().Value("userId").(uuid.UUID)
+		if userId == uuid.Nil {
+			sendErrorResponse(w, "Unknown User", 401)
+			return
+		}
+
+		chirp, err := cfg.Db.GetChirp(r.Context(), chirpId)
+		if err != nil {
+			log.Println(err) 
+			sendErrorResponse(w, "Chirp not found", 404)
+			return
+		}
+
+		if chirp.UserID != userId {
+			sendErrorResponse(w, "Not Chirp owner", 403)
+			return
+		}
+
+		_, err = cfg.Db.DeleteChirp(r.Context(), chirpId)
+		if err != nil {
+			log.Println(err)
+			sendErrorResponse(w, "Chirp not found", 404)
+			return
+		}
+
+		w.WriteHeader(204)
+		return
+	})
+}

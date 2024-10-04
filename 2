@@ -197,16 +197,6 @@ func (cfg *ApiConfig) UserUpdateHandler() http.Handler {
 			UpdatedAt: user.UpdatedAt,
 			Email: user.Email,
 		}
-		body, err := json.Marshal(resp)
-		if err != nil {
-			log.Println(err)
-			sendErrorResponse(w, "Unknown Err", 500)
-			return
-		}
 
-		w.WriteHeader(200)
-		w.Header().Add("Content-Type", "application/json")
-		w.Write(body)
-		return
 	})
 }

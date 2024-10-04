@@ -17,7 +17,8 @@ where token = $1;
 
 -- name: RevokeRefreshToken :one
 update refresh_tokens
-    set revoked_at = now()
+    set revoked_at = now(),
+        updated_at = now()
 where token = $1
 returning *;
 
