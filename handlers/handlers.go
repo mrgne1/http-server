@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"nginb/internal/auth"
 	"nginb/internal/database"
 	"sync/atomic"
 )
@@ -11,13 +15,52 @@ type ApiConfig struct {
 	FileserverHits atomic.Int32
 	Db             database.Queries
 	Platform       string
+	secret       string
 }
 
-func NewApiConfig(database *database.Queries, platform string) ApiConfig {
+func NewApiConfig(database *database.Queries, platform string, secret string) ApiConfig {
 	return ApiConfig{
 		Db: *database,
 		Platform: platform,
+		secret: secret,
 	}
+}
+
+func (cfg *ApiConfig) MiddlewareAuth(next http.Handler) http.Handler {
+	type errResponse struct {
+		Error string `json:"error"`
+	}
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			tokenString, err := auth.GetBearerToken(r.Header)
+			if err != nil {
+				log.Println(err)
+				resp := errorResponse {Error: "Unauthorized"}
+				body, _ := json.Marshal(resp)
+				w.WriteHeader(401)
+				w.Header().Add("Content-Type", "application/json")
+				w.Write(body)
+				return 
+			}
+
+			userId, err := auth.ValidateJWT(tokenString, cfg.secret)
+			if err != nil {
+				log.Println(err)
+				resp := errorResponse {Error: "Unauthorized"}
+				body, _ := json.Marshal(resp)
+				w.WriteHeader(401)
+				w.Header().Add("Content-Type", "application/json")
+				w.Write(body)
+				return 
+			}
+
+			ctx := r.Context()
+			ctx = context.WithValue(ctx, "userId", userId)
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		},
+	)
 }
 
 func (cfg *ApiConfig) MiddlewareMetrics(next http.Handler) http.Handler {
@@ -64,4 +107,14 @@ func (cfg *ApiConfig) ResetHandler() http.Handler {
 			w.Write([]byte("Reset completed"))
 		},
 	)
+}
+
+func sendErrorResponse(w http.ResponseWriter, message string, responseCode int) {
+	resp := errorResponse{
+		Error: message,
+	}
+	body, _ := json.Marshal(resp)
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(responseCode)
+	w.Write(body)
 }

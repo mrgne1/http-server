@@ -29,8 +29,7 @@ func (cfg *ApiConfig) CreateChirp() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			type parameters struct {
-				Body   string    `json:"body"`
-				UserId uuid.UUID `json:"user_id"`
+				Body string `json:"body"`
 			}
 
 			params := parameters{}
@@ -38,26 +37,14 @@ func (cfg *ApiConfig) CreateChirp() http.Handler {
 			err := decoder.Decode(&params)
 			if err != nil {
 				log.Println(err)
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(500)
-				resp := errorResponse{
-					Error: "Something went wrong",
-				}
-				body, _ := json.Marshal(resp)
-				w.Write([]byte(body))
+				sendErrorResponse(w, "Something went wrong", 500)
 				return
 			}
 
 			chirp := params.Body
 
 			if len(chirp) > 140 {
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(400)
-				resp := errorResponse{
-					Error: "Chirp is too long",
-				}
-				body, _ := json.Marshal(resp)
-				w.Write([]byte(body))
+				sendErrorResponse(w, "Chirp is too long", 400)
 				return
 			}
 
@@ -67,21 +54,23 @@ func (cfg *ApiConfig) CreateChirp() http.Handler {
 				cleanedChirp = strings.Replace(cleanedChirp, strings.ToUpper(p), "****", -1)
 			}
 
+			var userId uuid.UUID
+			userId = r.Context().Value("userId").(uuid.UUID)
+			if userId == uuid.Nil {
+				log.Println("UserId was not passed from middleware")
+				sendErrorResponse(w, "Something went wrong", 500)
+				return
+			}
+
 			chirpParams := database.CreateChirpParams{
 				ID:     uuid.New(),
 				Body:   cleanedChirp,
-				UserID: params.UserId,
+				UserID: userId,
 			}
 			savedChirp, err := cfg.Db.CreateChirp(r.Context(), chirpParams)
 			if err != nil {
 				log.Println(err)
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(500)
-				resp := errorResponse{
-					Error: "Something went wrong",
-				}
-				body, _ := json.Marshal(resp)
-				w.Write([]byte(body))
+				sendErrorResponse(w, "Something went wrong", 500)
 				return
 			}
 
@@ -108,13 +97,7 @@ func (cfg *ApiConfig) GetChirpsHandler() http.Handler {
 			chirps, err := cfg.Db.GetAllChirps(r.Context())
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Error getting chirps from DB",
-				}
-				body, _ := json.Marshal(resp)
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(500)
-				w.Write(body)
+				sendErrorResponse(w, "Error getting chirps from DB", 500)
 				return
 			}
 
@@ -142,26 +125,14 @@ func (cfg *ApiConfig) GetChirpHandler() http.Handler {
 			chirpId, err := uuid.Parse(r.PathValue("chirpID"))
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Invalid chirpID",
-				}
-				body, _ := json.Marshal(resp)
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(400)
-				w.Write(body)
+				sendErrorResponse(w, "Invalid Chirp ID", 400)
 				return
 			}
 
 			chirp, err := cfg.Db.GetChirp(r.Context(), chirpId)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Chirp not found in DB",
-				}
-				body, _ := json.Marshal(resp)
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(404)
-				w.Write(body)
+				sendErrorResponse(w, "Chirp not found in DB", 404)
 				return
 			}
 
@@ -181,3 +152,4 @@ func (cfg *ApiConfig) GetChirpHandler() http.Handler {
 		},
 	)
 }
+

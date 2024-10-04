@@ -12,10 +12,12 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func (c *ApiConfig) CreateUserHandler() http.Handler {
@@ -33,25 +35,15 @@ func (c *ApiConfig) CreateUserHandler() http.Handler {
 			decoder := json.NewDecoder(r.Body)
 			err := decoder.Decode(&params)
 			if err != nil {
-				resp := errorResponse{
-					Error: "Bad Request",
-				}
-				w.WriteHeader(400)
-				w.Header().Add("Content-Type", "application/json")
-				body, _ := json.Marshal(resp)
-				w.Write([]byte(body))
+				log.Println(err)
+				sendErrorResponse(w, "Bad Request", 400)
 				return
 			}
 
 			hashedPassword, err := auth.HashPasword(params.Password)
 			if err != nil {
-				resp := errorResponse{
-					Error: "Unknown Error",
-				}
-				w.WriteHeader(500)
-				w.Header().Add("Content-Type", "application/json")
-				body, _ := json.Marshal(resp)
-				w.Write([]byte(body))
+				log.Println(err)
+				sendErrorResponse(w, "Unknown Error", 500)
 				return
 			}
 
@@ -63,14 +55,7 @@ func (c *ApiConfig) CreateUserHandler() http.Handler {
 			user, err := c.Db.CreateUser(r.Context(), userParams)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Unable to create user",
-				}
-
-				body, _ := json.Marshal(resp)
-				w.WriteHeader(500)
-				w.Header().Add("Content-Type", "application/json")
-				w.Write(body)
+				sendErrorResponse(w, "Unable to create user", 500)
 				return
 			}
 
@@ -103,50 +88,57 @@ func (c *ApiConfig) LoginHandler() http.Handler {
 			err := decoder.Decode(&params)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Invalid parameters",
-				}
-
-				body, _ := json.Marshal(resp)
-				w.WriteHeader(400)
-				w.Header().Add("Content-Type", "application/json")
-				w.Write(body)
+				sendErrorResponse(w, "Invalid parameters", 400)
 				return
 			}
 
 			user, err := c.Db.GetUser(r.Context(), params.Email)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Unable to login",
-				}
-
-				body, _ := json.Marshal(resp)
-				w.WriteHeader(401)
-				w.Header().Add("Content-Type", "application/json")
-				w.Write(body)
+				sendErrorResponse(w, "Unable to login", 401)
 				return
 			}
 
 			err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse{
-					Error: "Unable to login",
-				}
-
-				body, _ := json.Marshal(resp)
-				w.WriteHeader(401)
-				w.Header().Add("Content-Type", "application/json")
-				w.Write(body)
+				sendErrorResponse(w, "Unable to login", 401)
 				return
 			}
 
+			token, err := auth.MakeJWT(user.ID, c.secret, time.Hour)
+			if err != nil {
+				log.Println(err)
+				sendErrorResponse(w, "Error creating token", 501)
+				return
+			}
+
+			refreshTokenString, err := auth.MakeRefreshToken()
+			if err != nil {
+				log.Println(err)
+				sendErrorResponse(w, "Error creating refresh token", 501)
+				return
+			}
+
+			createRefreshTokenParams := database.CreateRefreshTokenParams {
+				Token: refreshTokenString,
+				UserID: user.ID,
+				ExpiresAt: time.Now().Add(time.Hour * 24 * 60).UTC(),
+			}
+			refreshToken, err := c.Db.CreateRefreshToken(r.Context(), createRefreshTokenParams)
+			if err != nil {
+				log.Println(err)
+				sendErrorResponse(w, "Error recording refresh token", 500)
+				return 
+			}
+
 			resp := User{
-				ID: user.ID,
-				CreatedAt: user.CreatedAt,
-				UpdatedAt: user.UpdatedAt,
-				Email: user.Email,
+				ID:           user.ID,
+				CreatedAt:    user.CreatedAt,
+				UpdatedAt:    user.UpdatedAt,
+				Email:        user.Email,
+				Token:        token,
+				RefreshToken: refreshToken.Token,
 			}
 
 			body, _ := json.Marshal(resp)
