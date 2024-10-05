@@ -15,14 +15,16 @@ type ApiConfig struct {
 	FileserverHits atomic.Int32
 	Db             database.Queries
 	Platform       string
-	secret       string
+	secret         string
+	polkaKey       string
 }
 
-func NewApiConfig(database *database.Queries, platform string, secret string) ApiConfig {
+func NewApiConfig(database *database.Queries, platform string, secret string, polkaKey string) ApiConfig {
 	return ApiConfig{
-		Db: *database,
+		Db:       *database,
 		Platform: platform,
-		secret: secret,
+		secret:   secret,
+		polkaKey: polkaKey,
 	}
 }
 
@@ -35,23 +37,23 @@ func (cfg *ApiConfig) MiddlewareAuth(next http.Handler) http.Handler {
 			tokenString, err := auth.GetBearerToken(r.Header)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse {Error: "Unauthorized"}
+				resp := errorResponse{Error: "Unauthorized"}
 				body, _ := json.Marshal(resp)
 				w.WriteHeader(401)
 				w.Header().Add("Content-Type", "application/json")
 				w.Write(body)
-				return 
+				return
 			}
 
 			userId, err := auth.ValidateJWT(tokenString, cfg.secret)
 			if err != nil {
 				log.Println(err)
-				resp := errorResponse {Error: "Unauthorized"}
+				resp := errorResponse{Error: "Unauthorized"}
 				body, _ := json.Marshal(resp)
 				w.WriteHeader(401)
 				w.Header().Add("Content-Type", "application/json")
 				w.Write(body)
-				return 
+				return
 			}
 
 			ctx := r.Context()

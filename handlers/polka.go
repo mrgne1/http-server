@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"nginb/internal/database"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +17,24 @@ func (cfg *ApiConfig) PolkaWebhookHandler() http.Handler {
 			Data struct {
 				UserId uuid.UUID `json:"user_id"`
 			} `json:"data"`
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) == 0 {
+			sendErrorResponse(w, "Unauthorized", 401)
+			return
+		}
+
+		authHeaderValues := strings.Split(authHeader, " ")
+		if len(authHeaderValues) > 2 || authHeaderValues[0] != "ApiKey" {
+			sendErrorResponse(w, "Unauthorized", 401)
+			return
+		}
+
+		apiKey := strings.Trim(authHeaderValues[1], " ")
+		if apiKey != cfg.polkaKey {
+			sendErrorResponse(w, "Unauthorized", 401)
+			return
 		}
 
 		params := parameters {}

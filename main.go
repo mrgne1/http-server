@@ -26,13 +26,15 @@ func main() {
 	dbUrl := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
 	secret := os.Getenv("JWT_KEY")
+	polkaKey := os.Getenv("POLKA_KEY")
+
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	cfg := handlers.NewApiConfig(database.New(db), platform, secret)
+	cfg := handlers.NewApiConfig(database.New(db), platform, secret, polkaKey)
 	// FE Handlers
 	mainHandler := http.StripPrefix("/app", http.FileServer(http.Dir("./site")))
 	mux.Handle("/app/", cfg.MiddlewareMetrics(mainHandler))

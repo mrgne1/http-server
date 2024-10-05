@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"nginb/internal/database"
+	"slices"
 	"strings"
 	"time"
 
@@ -94,11 +95,24 @@ func (cfg *ApiConfig) CreateChirp() http.Handler {
 func (cfg *ApiConfig) GetChirpsHandler() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			chirps, err := cfg.Db.GetAllChirps(r.Context())
+			queryParams := r.URL.Query()
+
+			authorId, err := uuid.Parse(queryParams.Get("author_id"))
+			var chirps []database.Chirp
 			if err != nil {
-				log.Println(err)
-				sendErrorResponse(w, "Error getting chirps from DB", 500)
-				return
+				chirps, err = cfg.Db.GetAllChirps(r.Context())
+				if err != nil {
+					log.Println(err)
+					sendErrorResponse(w, "Error getting chirps from DB", 500)
+					return
+				}
+			} else {
+				chirps, err = cfg.Db.GetAllChirpsByAuthor(r.Context(), authorId)
+				if err != nil {
+					log.Println(err)
+					sendErrorResponse(w, "Error getting chirps from DB", 500)
+					return
+				}
 			}
 
 			resp := make([]Chirp, 0, len(chirps))
@@ -109,6 +123,19 @@ func (cfg *ApiConfig) GetChirpsHandler() http.Handler {
 					UpdatedAt: c.UpdatedAt,
 					Body:      c.Body,
 					UserId:    c.UserID,
+				})
+			}
+
+			sort := queryParams.Get("sort")
+			if sort == "desc" {
+				slices.SortFunc(resp, func(a Chirp, b Chirp) int {
+					if a.CreatedAt.Equal(b.CreatedAt) {
+						return 0
+					} else if a.CreatedAt.Before(b.CreatedAt) {
+						return 1
+					} else {
+						return -1
+					}
 				})
 			}
 			body, _ := json.Marshal(resp)
@@ -169,7 +196,7 @@ func (cfg *ApiConfig) DeleteChirpHandler() http.Handler {
 
 		chirp, err := cfg.Db.GetChirp(r.Context(), chirpId)
 		if err != nil {
-			log.Println(err) 
+			log.Println(err)
 			sendErrorResponse(w, "Chirp not found", 404)
 			return
 		}
